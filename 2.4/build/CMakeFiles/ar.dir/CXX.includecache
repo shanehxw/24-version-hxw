@@ -15,6 +15,8 @@ memory
 -
 cmath
 -
+algorithm
+-
 opencv2/opencv.hpp
 -
 opencv2/core.hpp

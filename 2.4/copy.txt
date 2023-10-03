@@ -72,3 +72,55 @@
                 imshow("point",frame);
 
                 //std::cout<<Point_fix.size()<<std::endl
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                if(rect1_width >= rect1_height)  // 右板rect1右偏
+                    {
+                        img_input.push_back(rect_point1[0]);  // 1-1 右下
+                        img_input.push_back(rect_point1[3]);  // 1-4 右上
+                    }
+                if(rect1_width < rect1_height)  // 右板rect1左偏
+                    {
+                        img_input.push_back(rect_point1[3]);  // 1-4 右下
+                        img_input.push_back(rect_point1[2]);  // 1-3 右上
+                    }
+
+                if(rect2_width >= rect2_height)  // 左板rect2右偏
+                    {
+                        img_input.push_back(rect_point2[1]);  // 2-2 左下
+                        img_input.push_back(rect_point2[2]);  // 2-3 左上
+                    }
+                if(rect2_width < rect2_height)  // 左板rect2左偏
+                    {
+                        img_input.push_back(rect_point2[0]);  // 2-1 左下
+                        img_input.push_back(rect_point2[1]);  // 2-2 左上
+                    }
+                img_input.push_back(Point2f(center_point[0],center_point[1]));  // 中心
+
+
+
+
+                Point2f temp = rect_point[0];
+        for(int j = 1; j < point_num; j++){
+            for(int i = 0; i < (point_num - j);)
+            {
+                if(rect_point[i].y <= rect_point[i+1].y)
+                {   
+                    temp = rect_point[i];
+                    rect_point[i] = rect_point[i+1];
+                }
+            }
+        }

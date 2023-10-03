@@ -2,6 +2,7 @@
 #include <vector>
 #include <memory>
 #include <cmath>
+#include <algorithm>
 #include <opencv2/opencv.hpp> 
 #include <opencv2/core.hpp> 
 #include <opencv2/imgproc.hpp> 
@@ -138,9 +139,136 @@ void draw_point(Mat frame, double center_point[], double rect_centerpoint []){
 
 }
 
-//-------------------------------------------主函数--------------------------------------------------
+//------------------------------------------点的排序-----------------------------------------------------
 
-int main(){
+bool compareValue(const Point2f& pt1, const Point2f& pt2)
+{
+	if (pt1.y != pt2.y)
+		return pt1.y > pt2.y;  // y从小到大排序
+	else
+		return pt1.x > pt2.x;
+}
+
+std::vector<Point2f> pointrank(std::vector<Point2f> Rect_point){  
+
+        std::sort(Rect_point.begin(), Rect_point.end(), compareValue);
+
+        return Rect_point;
+}
+
+//--------------------------------------------测距--------------------------------------------------------
+
+double distances_detect(std::vector<RotatedRect> minAreaRects, double center_point[], double rect_centerpoint[], int No_rect[], Mat frame)
+{
+    //-------测距预处理-------
+    Point2f rect_point1[4];
+    Point2f rect_point2[4];  // 用于记录矩形的四个点
+
+    if(rect_centerpoint[0] > center_point[0])  // 让右边的矩形作为第一个矩形
+    {
+        minAreaRects[No_rect[0]].points(rect_point1);
+        minAreaRects[No_rect[1]].points(rect_point2);
+    }
+    else
+    {
+        minAreaRects[No_rect[1]].points(rect_point1);
+        minAreaRects[No_rect[0]].points(rect_point2);
+    }
+
+    std::vector <Point2f> Rect_point1 (std::begin(rect_point1),std::end(rect_point1));
+    std::vector <Point2f> Rect_point2 (std::begin(rect_point2),std::end(rect_point2));  // 存入vector
+    Rect_point1 = pointrank(Rect_point1);
+    Rect_point2 = pointrank(Rect_point2);  // 对点进行排序
+                
+    std::vector<Point2f> img_input;
+    std::vector<Point3f> world_input;
+
+                //for(int i = 0; i < 4; i++){
+                  //  circle(frame, rect_point1[i], 5, Scalar(255,0,255),-1);
+                    //circle(frame, rect_point2[i], 5, Scalar(255,0,255),-1);
+                //}
+                //imshow("test",frame);
+
+                //circle(frame, rect_point1[0], 5, Scalar(255,0,255),-1);
+                //imshow("111",frame);
+                //imshow("test",frame);
+
+                //for(int i = 0; i<img_input.size();i++){
+                //   circle(frame,img_input.at(i),5,Scalar(255,0,255),-1);
+                //}
+                //imshow("img",frame);
+    if(Rect_point1[0].x >= Rect_point1[1].x)  // 右边矩形右偏
+    {
+        img_input.push_back(Rect_point1[0]);  // 右下
+        img_input.push_back(Rect_point1[2]);  // 右上
+    }
+    else  // 右边矩形左偏
+    {
+        img_input.push_back(Rect_point1[1]);  // 右下
+        img_input.push_back(Rect_point1[3]);  // 右上
+    }
+
+    if(rect_point2[0].x >= Rect_point2[1].x)  // 左边矩形右偏
+    {
+        img_input.push_back(Rect_point2[1]);  // 左下
+        img_input.push_back(Rect_point2[3]);  // 左上
+    }
+    else  // 左边矩形左偏
+    {
+        img_input.push_back(Rect_point2[0]);  // 左下
+        img_input.push_back(Rect_point2[2]);  // 左上
+    }
+
+    img_input.push_back(Point2f(center_point[0],center_point[1]));  // 中心
+
+                //for(int i = 0; i<img_input.size();i++){
+                //circle(frame,img_input.at(i),5,Scalar(255,0,255),-1);
+                //}
+                //for(int i = 2; i<4;i++){
+                //    circle(frame,img_input.at(i),5,Scalar(255,0,255),-1);
+                //}
+                //imshow("img",frame);
+
+                // circle(frame,Rect_point1[0],5,Scalar(255,0,255),-1);
+                // imshow("img1",frame);
+
+
+    world_input.push_back(Point3f(ARMOUR_LENGTH/2, -ARMOUR_WIDTH/2, 0));  // 右下
+    world_input.push_back(Point3f(ARMOUR_LENGTH/2, ARMOUR_WIDTH/2, 0));  // 右上
+    world_input.push_back(Point3f(-ARMOUR_LENGTH/2, -ARMOUR_WIDTH/2, 0));  // 左下
+    world_input.push_back(Point3f(-ARMOUR_LENGTH/2, ARMOUR_WIDTH/2, 0));  // 左上
+    world_input.push_back(Point3f(0,0,0));  // 中心
+                
+
+    Mat rvec, tvec;
+    cv::solvePnPRansac(world_input, img_input, CAMERA_MADRIX, DIST_COEFFS, rvec, tvec);
+
+    Mat Rvec, Tvec;
+    rvec.convertTo(Rvec, CV_32F);  // 旋转向量转换格式
+	tvec.convertTo(Tvec, CV_32F); // 平移向量转换格式 
+
+	Mat_<float> rotMat(3, 3);
+	Rodrigues(Rvec, rotMat);  // 旋转向量转成旋转矩阵
+
+                //std::cout<<Tvec<<std::endl;
+
+    Mat distance;
+	distance = -rotMat.inv() * Tvec;
+                //for(int i = 0; i<4 ;++i)
+                  //  std::cout<<No_rect[i]<<std::endl;  // --不是轮廓的问题
+                //std::cout<<center_point[0]<<std::endl;
+                //std::cout<<center_point[1]<<std::endl;  // --不是中心点问题
+    std::cout<<(int)distance.at<uchar>(1,3)<<std::endl;
+
+    img_input.clear();
+    world_input.clear();
+    return distance.at<uchar>(1,3);           
+}
+
+//-------------------------------------------主函数-----------------------------------------------------
+
+int main()
+{
     cv::VideoCapture cap("../armour.avi");
 
     if(cap.isOpened())
@@ -186,159 +314,14 @@ int main(){
                 double center_point[2] = {0,0};  // 用于装甲板中心点的储存
                 double rect_centerpoint [4] = {0,0,0,0};  // 用于矩形中心点的储存，x-y-x-y
                 int No_rect[4] = {0,0,0,0};  // 用于记录direct函数中的矩形序号
-                Point2f rect_point1[4];
-                Point2f rect_point2[4];  // 用于记录矩形的四个点
                 std::vector<RotatedRect> minAreaRects(Point_fix.size());  // 用于矩形信息储存
 
                 minAreaRects = direct_centerpoint(dst, center_point, rect_centerpoint, No_rect, Point_fix);
                 
                 //draw_point(frame, center_point, rect_centerpoint);
 
-
-        //-------------------------------------测距模块--------------------------------------------
-                //-------测距预处理-------
-                if(rect_centerpoint[0] > center_point[0])  // 让右边的矩形作为第一个矩形
-                {
-                    minAreaRects[No_rect[0]].points(rect_point1);
-                    minAreaRects[No_rect[1]].points(rect_point2);
-                }
-                else
-                {
-                    minAreaRects[No_rect[1]].points(rect_point1);
-                    minAreaRects[No_rect[0]].points(rect_point2);
-                }
+                distances_detect(minAreaRects, center_point, rect_centerpoint, No_rect, frame);
                 
-                float rect1_width = minAreaRects[No_rect[0]].size.width;
-                float rect1_height = minAreaRects[No_rect[0]].size.height;
-                
-                float rect2_width = minAreaRects[No_rect[1]].size.width;
-                float rect2_height = minAreaRects[No_rect[1]].size.height;
-                
-                std::vector<Point2f> img_input;
-                std::vector<Point3f> world_input;
-
-                //for(int i = 0; i < 4; i++){
-                  //  circle(frame, rect_point1[i], 5, Scalar(255,0,255),-1);
-                    //circle(frame, rect_point2[i], 5, Scalar(255,0,255),-1);
-                //}
-                //imshow("test",frame);
-
-                //circle(frame, minAreaRects[No_rect[0]].center, 5, Scalar(255,0,255),-1);
-                //imshow("test",frame);
-
-                
-                if(rect1_width >= rect1_height)  // 右板rect1右偏
-                    {
-                        img_input.push_back(rect_point1[0]);  // 1-1 右下
-                        img_input.push_back(rect_point1[3]);  // 1-4 右上
-                    }
-                if(rect1_width < rect1_height)  // 右板rect1左偏
-                    {
-                        img_input.push_back(rect_point1[3]);  // 1-4 右下
-                        img_input.push_back(rect_point1[2]);  // 1-3 右上
-                    }
-
-                if(rect2_width >= rect2_height)  // 左板rect2右偏
-                    {
-                        img_input.push_back(rect_point2[1]);  // 2-2 左下
-                        img_input.push_back(rect_point2[2]);  // 2-3 左上
-                    }
-                if(rect2_width < rect2_height)  // 左板rect2左偏
-                    {
-                        img_input.push_back(rect_point2[0]);  // 2-1 左下
-                        img_input.push_back(rect_point2[1]);  // 2-2 左上
-                    }
-                img_input.push_back(Point2f(center_point[0],center_point[1]));  // 中心
-
-                }
-
-                if(rect_point1[0].x <= center_point[0])  // 装甲板左偏，左边的是rect1
-                {   
-                    if(rect1_width >= rect1_height)  // 左板rect1右偏
-                    {
-                        img_input.push_back(rect_point1[1]);  // 1-2 左下
-                        img_input.push_back(rect_point1[2]);  // 1-3 左上
-                    }
-                    if(rect1_width < rect1_height)  // 左板rect1左偏
-                    {
-                        img_input.push_back(rect_point1[0]);  // 1-1 左下
-                        img_input.push_back(rect_point1[1]);  // 1-2 左上
-                    }
-
-                    if(rect2_width >= rect2_height)  // 右板rect2右偏
-                    {
-                        img_input.push_back(rect_point2[0]);  // 1-1 右下
-                        img_input.push_back(rect_point2[3]);  // 1-4 右上
-                    }
-                    if(rect2_width < rect2_height)  // 右板rect2左偏
-                    {
-                        img_input.push_back(rect_point2[3]);  // 1-4 右下
-                        img_input.push_back(rect_point2[2]);  // 1-3 右上
-                    }
-                    
-                    img_input.push_back(Point2f(center_point[0],center_point[1]));  // 中心
-
-                }
-                
-                for(int i = 0; i<img_input.size();i++){
-                   circle(frame,img_input.at(i),5,Scalar(255,0,255),-1);
-                }
-                imshow("img",frame);
-
-                world_input.push_back(Point3f(ARMOUR_LENGTH/2, -ARMOUR_WIDTH/2, 0));
-                world_input.push_back(Point3f(ARMOUR_LENGTH/2, ARMOUR_WIDTH/2, 0));
-                world_input.push_back(Point3f(-ARMOUR_LENGTH/2, -ARMOUR_WIDTH/2, 0));
-                world_input.push_back(Point3f(-ARMOUR_LENGTH/2, ARMOUR_WIDTH/2, 0));
-                world_input.push_back(Point3f(0,0,0));  // 中心
-                
-
-                Mat rvec, tvec;
-                cv::solvePnPRansac(world_input, img_input, CAMERA_MADRIX, DIST_COEFFS, rvec, tvec);
-
-                Mat Rvec, Tvec;
-                rvec.convertTo(Rvec, CV_32F);  // 旋转向量转换格式
-	            tvec.convertTo(Tvec, CV_32F); // 平移向量转换格式 
-
-	            Mat_<float> rotMat(3, 3);
-	            Rodrigues(Rvec, rotMat);
-	            // 旋转向量转成旋转矩阵
-
-                //std::cout<<Tvec<<std::endl;
-
-                Mat distance;
-	            distance = -rotMat.inv() * Tvec;
-                //for(int i = 0; i<4 ;++i)
-                  //  std::cout<<No_rect[i]<<std::endl;  // --不是轮廓的问题
-                //std::cout<<center_point[0]<<std::endl;
-                //std::cout<<center_point[1]<<std::endl;  // --不是中心点问题
-                std::cout<<(int)distance.at<uchar>(1,3)<<std::endl;
-
-                //-------记录第一帧信息，假设其在深度方向上水平-------
-                 // 用于记录第一帧（假设深度为零）的中心点image距离
-                    
-                //-------计算世界坐标系下的深度参数-------
-                //deep_cal = (std::sqrt(std::pow(DISTANCE_DEEP_ZERO, 2) - (std::pow(distance_midpoint_to_midpoint[0], 2)+std::pow(distance_midpoint_to_midpoint[1],2))) + std::sqrt(std::pow(DISTANCE_DEEP_ZERO, 2) - (std::pow(distance_midpoint_to_midpoint[3], 2)+std::pow(distance_midpoint_to_midpoint[4],2)))) / 2;
-
-                //-------构建世界坐标系与像素坐标系-------
-                //world_point_array = { Point3d() , Point3d() , Point3d() , Point3d() , Point3d() , };
-                //img_point_array = { Point2d() , Point2d() , Point2d() , Point2d() , Point2d() , };
-
-                //cv::Point2f* img_example_2fpoint = new cv::Point2f(4);  
-                //cv::Point3f* world_example_3fpoint = new cv::Point3f(4);
-                // 注意free！！！
-               
-                //minAreaRects[i_memory].points(img_example_2fpoint);  // 2D点坐标
-                
-                //delete img_example_2fpoint;
-                //delete world_example_3fpoint;
-                // 如何知道哪个点对应世界坐标系上的对应点？
-                //float world_example[12] = {0,0,0,0,20,}
-                // 装甲板尺寸是多少？
-
-
-                
-
-
             }
         if(cv::waitKey(50) >= 0)  //一秒约24帧,按下键盘任意键退出
             break;
@@ -346,3 +329,5 @@ int main(){
     }
     return 0;
 }
+
+
