@@ -13,6 +13,32 @@ using namespace cv;
 
 //---------------------------------------装甲板组------------------------------------------------------------
 
+<<<<<<< HEAD
+=======
+class armour{
+    public:
+        RotatedRect left;
+        RotatedRect right;
+        float angle;
+        float length;
+        float width;
+    private:
+        int id;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>>>>>> 5f0ca73ccb4a0290bd1c255f4f3a6c46adb4be95
 
 //----------------------------------------预参数-----------------------------------------------------
 
@@ -77,9 +103,14 @@ Mat filtering(Mat frame){
     Mat frame_erode;
     Mat frame_dilate;
     cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));  //池化核大小
+<<<<<<< HEAD
     cv::erode(frame, frame_erode, kernel, Point(-1,-1), 1);  // 腐蚀一次
     cv::dilate(frame_erode, frame_dilate, kernel, Point(-1,-1), 2);
     cv::imshow("filtering", frame_dilate);
+=======
+    cv::erode(frame, frame_erode, kernel, cv::Point(-1,-1), 1);  // 腐蚀一次
+    cv::imshow("filtering", frame_erode);
+>>>>>>> 5f0ca73ccb4a0290bd1c255f4f3a6c46adb4be95
 
     return frame_dilate;
 }
@@ -144,8 +175,12 @@ void draw_point(Mat frame, double center_point[], double rect_centerpoint []){
 
 }
 
+<<<<<<< HEAD
 //------------------------------------------轮廓检索1.5------------------------------------------------------------
 //问题：compare太卡了
+=======
+//------------------------------------------轮廓检索1.1------------------------------------------------------------
+>>>>>>> 5f0ca73ccb4a0290bd1c255f4f3a6c46adb4be95
 
 bool compare_Left_or_Right(const RotatedRect& pt1, const RotatedRect& pt2)
 {
@@ -171,6 +206,7 @@ std::vector<RotatedRect> pointrank1(std::vector<RotatedRect> Rect_point)
         return Rect_point;
 }
 
+<<<<<<< HEAD
 int rect_compare(float rect1_angle, float rect1_size_height, float rect1_size_width, float rect2_angle, float rect2_size_width, float rect2_size_height)
 {   
     float rect1_length = rect1_size_width > rect1_size_height ? rect1_size_width : rect1_size_height;
@@ -309,8 +345,97 @@ void draw_rect_array(Point2f rect_point[], Mat frame){
     for(int i = 0; i < 4; i++)
     {  
         line(frame, rect_point[i%4], rect_point[(i+1)%4], Scalar(255,0,120), 3);
+=======
+bool rect_compare(RotatedRect rect1, RotatedRect rect2)
+{   
+    float rect1_length = rect1.size.width > rect1.size.height ? rect1.size.width : rect1.size.height;
+    float rect1_width = rect1.size.width <= rect1.size.height ? rect1.size.width : rect1.size.height;
+    float rect2_length = rect2.size.width > rect2.size.height ? rect2.size.width : rect2.size.height;
+    float rect2_width = rect2.size.width <= rect2.size.height ? rect2.size.width : rect2.size.height;
+
+    if( (rect1_length-rect2_length) / ((rect1_length + rect2_length) / 2) > 0.1 )
+        return false;
+    if( (rect1.angle - rect2.angle) / ((rect1.angle + rect2.angle) / 2) >0.1 )
+        return false;
+    
+    return true;
+}
+
+
+
+std::vector<Point2f> rect_point_cal(float avg_dia, float k1_world, float k2_armour, Point2f center)
+{
+    float k3 = 0;
+    float k4 = 0;
+    float ang_to_center_x_1 = 0;
+    float ang_to_center_y_1 = avg_dia;
+    float ang_to_center_x_2 = 0;
+    float ang_to_center_y_2 = avg_dia;
+    if(k1_world*k2_armour != 1)
+    {
+        k3 = (k1_world+k2_armour)/(1-k1_world*k2_armour);  //对k1k2合角,+ 
+        ang_to_center_x_1 = avg_dia / std::sqrt(std::pow(k3, 2) + 1);
+        ang_to_center_y_1 = k3 * avg_dia / std::sqrt(std::pow(k3, 2) + 1);
+    }
+    if(k1_world*k2_armour != -1)
+    {
+        k4 = (k2_armour-k1_world)/(1+k2_armour*k1_world);  // 对k1k2合角，-
+        ang_to_center_x_2 = avg_dia / std::sqrt(std::pow(k4, 2) + 1);
+        ang_to_center_y_2 = k4 * avg_dia / std::sqrt(std::pow(k4, 2) + 1);
     }
 
+    // 点的方案
+    Point2f point_RIGHTDOWM (center.x + ang_to_center_x_1, center.y + ang_to_center_y_1);  // 求出右下点
+    Point2f point_LEFTDOWN (center.x - ang_to_center_x_2, center.y + ang_to_center_y_2);  // 求出左下点
+    Point2f point_LEFTUP (center.x - ang_to_center_x_1, center.y - ang_to_center_y_1);  // 求出左上点
+    Point2f point_RIGHTUP (center.x + ang_to_center_x_2, center.y - ang_to_center_y_2);  // 求出右上点
+    
+    std::vector<cv::Point2f> rect_combine;
+    rect_combine.push_back(point_RIGHTDOWM);
+    rect_combine.push_back(point_LEFTDOWN);
+    rect_combine.push_back(point_LEFTUP);
+    rect_combine.push_back(point_RIGHTUP);  // 右下-左下-左上-右上
+
+    return rect_combine;
+}
+
+std::vector<Point2f> combine_rect(RotatedRect rect1, RotatedRect rect2, Mat frame)
+{
+
+   
+    float x_diff = rect2.center.x - rect1.center.x;
+    float y_diff = rect2.center.y - rect1.center.y;
+    float avg_length_pre = ((rect1.size.width > rect1.size.height ? rect1.size.width : rect1.size.height) + (rect2.size.width > rect2.size.height ? rect2.size.width : rect2.size.height))/2;
+    float avg_length = ((avg_length_pre - ((rect1.size.width < rect1.size.height ? rect1.size.width : rect1.size.height) + (rect2.size.width < rect2.size.height ? rect2.size.width : rect1.size.height)) / 2) / avg_length_pre) * avg_length_pre;
+    //消去灯条宽度带来的length误差
+    float m2 =0.5;
+    float avg_width = m2*(std::sqrt(std::pow(rect2.center.x - rect1.center.x, 2) + std::pow(rect2.center.y - rect1.center.y, 2)));
+    // 消去width的sqrt误差的系数
+    float avg_dia = std::sqrt(std::pow(avg_length, 2) + std::pow(avg_width, 2));
+    float k1 = 0;
+    if(x_diff != 0)
+        k1 = y_diff / x_diff;  // 整体倾斜角，右斜为正
+    float k2 = avg_length / avg_width;  // 装甲板矩形倾斜角
+    Point2f center((rect2.center.x + rect1.center.x)/2, (rect2.center.y+rect1.center.y)/2);
+
+    circle(frame, center, 3, Scalar(255,0,120),-1);
+    imshow("center",frame);
+
+    return rect_point_cal(avg_dia, k1, k2, center);
+}
+
+
+
+void draw_rect(std::vector<Point2f> rect, Mat frame)
+{   
+    for(int i = 0; i < rect.size(); i++)
+    {   
+        line(frame, rect[i%rect.size()], rect[(i+1)%rect.size()], Scalar(255,0,120), 3);
+>>>>>>> 5f0ca73ccb4a0290bd1c255f4f3a6c46adb4be95
+    }
+}
+
+<<<<<<< HEAD
 }
 
 std::vector<Point2f> combine_rect(RotatedRect rect1, RotatedRect rect2, Mat frame)
@@ -337,8 +462,35 @@ std::vector<Point2f> combine_rect(RotatedRect rect1, RotatedRect rect2, Mat fram
 
     return rect_point_cal(avg_dia, k1, k2, center);
 }
+=======
 
 
+std::vector<std::vector<Point2f>> direct_rect(std::vector<std::vector<cv::Point> > Point_fix, Mat frame){
+    
+    
+    std::vector<RotatedRect> minAreaRects;
+    RotatedRect temp;
+    //-------找到小矩形轮廓-------
+    for (int i = 0; i < Point_fix.size(); i++)
+    {   
+        temp = minAreaRect(Point_fix[i]);
+        if()
+		minAreaRects.push_back(temp);
+    }
+
+    //-------排序-------
+    sort(minAreaRects.begin(), minAreaRects.end(), compare_Left_or_Right);
+>>>>>>> 5f0ca73ccb4a0290bd1c255f4f3a6c46adb4be95
+
+    //-------合成-------
+    std::vector<std::vector<Point2f>> manyrect;
+    for(int j = 0; j < (minAreaRects.size() - 1); j++)
+    {
+        manyrect.push_back( combine_rect(minAreaRects[j], minAreaRects[j+1], frame));
+    }
+    return manyrect;
+
+<<<<<<< HEAD
 
 std::vector<std::vector<Point2f>> direct_rect(std::vector<std::vector<cv::Point> > Point_fix, Mat frame){
     
@@ -385,6 +537,21 @@ bool compareValue(const Point2f& pt1, const Point2f& pt2)
 		return pt1.x > pt2.x;
 }
 
+=======
+}
+
+
+//------------------------------------------点的排序-----------------------------------------------------
+
+bool compareValue(const Point2f& pt1, const Point2f& pt2)
+{
+	if (pt1.y != pt2.y)
+		return pt1.y > pt2.y;  // y从小到大排序
+	else
+		return pt1.x > pt2.x;
+}
+
+>>>>>>> 5f0ca73ccb4a0290bd1c255f4f3a6c46adb4be95
 std::vector<Point2f> pointrank(std::vector<Point2f> Rect_point){  
 
         std::sort(Rect_point.begin(), Rect_point.end(), compareValue);
