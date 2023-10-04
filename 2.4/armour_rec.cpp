@@ -22,14 +22,15 @@ const double ARMOUR_WIDTH = 100;  // 装甲板长宽
 
 //----------------------------------------简单工具-----------------------------------------------------------------
 
-cv::Point2f mid_point(Point2f a, Point2f b)
+cv::Point2f mid_point(Point2f a, Point2f b)  // 求Point中心点
 {
     Point2f mid (a.x + b.x , a.y + b.y);
     return mid;
 }
 
 
-Point2f array_to_point(float* array){
+Point2f array_to_point(float* array)  // 把float[2]转化成Point
+{
     
     Point2f point(array[0],array[1]);
     return point;
@@ -38,7 +39,7 @@ Point2f array_to_point(float* array){
 
 //--------------------------------------------矩形工具----------------------------------------------------------------------
 
-void find_length_and_width(float width, float height, float* array)
+void find_length_and_width(float width, float height, float* array)  // 对minareaRect的宽高进行排序
 {   
     if(width < height) 
     {
@@ -52,25 +53,25 @@ void find_length_and_width(float width, float height, float* array)
     }
 }
 
-void draw_rect_array(Point2f rect_point[], Mat frame){
-
+void draw_rect_array(Point2f rect_point[], Mat frame)  // 通过Point2f[4]画出矩形
+{ 
     for(int i = 0; i < 4; i++)
     {  
         line(frame, rect_point[i%4], rect_point[(i+1)%4], Scalar(255,0,120), 1);
     }
 }
 
-void draw_rect(std::vector<Point2f> rect, Mat frame)
+void draw_rect(std::vector<Point2f> rect, Mat frame)  // 通过vector<Point2f>画出矩形
 {   
-    for(int i = 0; i < rect.size(); i++)
+    for(int i = 0; i < 4; i++)
     {   
-        line(frame, rect[i%rect.size()], rect[(i+1)%rect.size()], Scalar(255,0,120), 1);
+        line(frame, rect[i%4], rect[(i+1)%4], Scalar(255,0,120), 1);
     }
 }
 
 
 //-------------------------------------------排序工具---------------------------------------------
-bool compare_Left_or_Right(const RotatedRect& pt1, const RotatedRect& pt2)
+bool compare_Left_or_Right(const RotatedRect& pt1, const RotatedRect& pt2)  // 通过中心点对矩形进行从左到右的排序
 {
 	if (pt1.center.x != pt2.center.x)
 		return pt1.center.x < pt2.center.x;  // x从小到大排序
@@ -78,7 +79,7 @@ bool compare_Left_or_Right(const RotatedRect& pt1, const RotatedRect& pt2)
 		return pt1.center.y < pt2.center.y;
 }
 
-std::vector<RotatedRect> pointrank1(std::vector<RotatedRect> Rect_point)
+std::vector<RotatedRect> pointrank1(std::vector<RotatedRect> Rect_point)  // compare_Left_or_Right的触发函数
 {  
 
         std::sort(Rect_point.begin(), Rect_point.end(), compare_Left_or_Right);
@@ -86,7 +87,7 @@ std::vector<RotatedRect> pointrank1(std::vector<RotatedRect> Rect_point)
         return Rect_point;
 }
 
-bool compareValue(const Point2f& pt1, const Point2f& pt2)
+bool compareValue(const Point2f& pt1, const Point2f& pt2)  // 对点从下到上排序
 {
 	if (pt1.y != pt2.y)
 		return pt1.y > pt2.y;  // y从小到大排序
@@ -94,7 +95,8 @@ bool compareValue(const Point2f& pt1, const Point2f& pt2)
 		return pt1.x > pt2.x;
 }
 
-std::vector<Point2f> pointrank(std::vector<Point2f> Rect_point){  
+std::vector<Point2f> pointrank(std::vector<Point2f> Rect_point)  // compareValue的触发函数
+{  
 
         std::sort(Rect_point.begin(), Rect_point.end(), compareValue);
 
@@ -132,7 +134,7 @@ Mat pretreatment(Mat frame){
 }
 
 //--------------------------------------提取感兴趣区域------------------------------------------------
-
+//可以完善，通过对上一帧的装甲板识别确定装甲板大致区域，降低干扰
 Mat region_interested(Mat frame, int height, int width){    
     int row, col;
     for(row = 0; row < int(height / 10); ++row)  // 行，即y轴
@@ -151,24 +153,23 @@ Mat region_interested(Mat frame, int height, int width){
 }
 
 //-----------------------------------------滤波处理----------------------------------------------------
-
+// 通过2次膨胀增大装甲板亮光区域，防止装甲板因过于纤细造成的矩形识别误差
 Mat filtering(Mat frame){
-    
     Mat frame_erode;
     Mat frame_dilate;
     cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));  //池化核大小
     cv::erode(frame, frame_erode, kernel, Point(-1,-1), 1);  // 腐蚀一次
     cv::dilate(frame_erode, frame_dilate, kernel, Point(-1,-1), 2);  //膨胀两次
-    cv::imshow("filtering", frame_dilate);
+    //cv::imshow("filtering", frame_dilate);
 
     return frame_dilate;
 }
 
 
-//------------------------------------------轮廓检索1.6------------------------------------------------------------
-//问题：compare太卡了
+//------------------------------------------轮廓检索2.0------------------------------------------------------------
 
-std::vector<Point2f> rect_amend_for_width(float* array1, float* array2, float k, float avg_width)  // 取中间点，按照斜率重新计算
+// 对得到的一组矩形修正：取中间点，按照斜率重新计算角点
+std::vector<Point2f> rect_amend_for_width(float* array1, float* array2, float k, float avg_width)  
 {
     float mid_x = (array1[0] + array2[0]) / 2;
     float mid_y = (array1[1] + array2[1]) / 2;
@@ -188,6 +189,7 @@ std::vector<Point2f> rect_amend_for_width(float* array1, float* array2, float k,
 
 }
 
+// 使用长度计算矩形角点，包括初步处理以及rect_amend_for_width修正
 std::vector<Point2f> rect_point_cal(float avg_dia, float avg_width, float k1_world, float k2_armour, Point2f center)
 {
     float k3 = 0;
@@ -233,15 +235,39 @@ std::vector<Point2f> rect_point_cal(float avg_dia, float avg_width, float k1_wor
     rect_combine.push_back(LeftDown_point);
     rect_combine.push_back(LeftUp_point);
     rect_combine.push_back(RightUp_point);  // ***右下-左下-左上-右上***
-
+    rect_combine.push_back(center); 
     return rect_combine;
 }
 
+// 想法：计算菱形角点，在计算速度上会比计算矩形更加快
+// 已经实现，但在框选上有误差，可以再调试
+std::vector<Point2f> rhom_point_cal(float avg_length, float avg_width, float x_diff, float y_diff, Point2f leftpoint, Point2f rightpoint,Point2f center)
+{
+    float center_x = center.x;
+    float center_y = center.y;
+    
+    float mid_X_DIFF = x_diff / 2;
+    float mid_Y_DIFF = y_diff / 2;
+
+    float goal_x_diff = mid_Y_DIFF * avg_length / avg_width;
+    float goal_y_diff = mid_X_DIFF * avg_length / avg_width;
+
+    std::vector<Point2f> vertical_point;
+    Point2f uppoint (center_x + goal_x_diff, center_y - goal_y_diff);
+    Point2f downpoint (center_x - goal_x_diff, center_y + goal_y_diff);
+
+    vertical_point.push_back(downpoint);
+    vertical_point.push_back(leftpoint); 
+    vertical_point.push_back(uppoint); 
+    vertical_point.push_back(rightpoint);  //下、左、上、右
+
+    return vertical_point;
+
+}
 
 
-
-
-
+// 通过对长宽以及角度的相似程度，对多组得到的rectage进行装甲板识别
+// 可以通过设置识别顺序等，减少运行时间，可以再完善
 int rect_compare(float rect1_angle, float* rect1_landw, float rect2_angle, float* rect2_landw)
 {   
 
@@ -253,7 +279,7 @@ int rect_compare(float rect1_angle, float* rect1_landw, float rect2_angle, float
     return 1;
 }
 
-
+// 对一组矩形进行合并，实现对装甲板的框选，本函数内部是一些参数的初步处理，通过引用其他函数实现功能
 std::vector<Point2f> combine_rect(RotatedRect rect1, RotatedRect rect2, Mat frame)
 {
     float rect1_center[2] = {rect1.center.x , rect1.center.y};
@@ -270,11 +296,11 @@ std::vector<Point2f> combine_rect(RotatedRect rect1, RotatedRect rect2, Mat fram
     float avg_length_pre = (rect1_landw[0] + rect2_landw[0])/ 2;
     float m1 = 0.9;
     float avg_length = avg_length_pre - (rect1_landw[1] + rect2_landw[1]) / 2;
-    //消去灯条宽度带来的length误差
+    // 从两minareaRect长度求出length，消去灯条宽度带来的length误差
     
     float m2 = 0.9;
     float avg_width = (std::sqrt(std::pow(rect2_center[0] - rect1_center[0], 2) + std::pow(rect2_center[1] - rect1_center[1], 2)));
-    // 消去width的sqrt误差的系数
+    // 从两中心点求出width，消去width的sqrt误差的系数
     
     float avg_dia = std::sqrt(std::pow(avg_length, 2) + std::pow(avg_width, 2));
     float k1 = 0;
@@ -287,6 +313,7 @@ std::vector<Point2f> combine_rect(RotatedRect rect1, RotatedRect rect2, Mat fram
     //imshow("center",frame);
 
     return rect_point_cal(avg_dia, avg_width, k1, k2, center);
+    //return rhom_point_cal(avg_length, avg_width, x_diff, y_diff, rect1.center, rect2.center, center);  // 菱形
 }
 
 //___________________________________轮廓检测主函数__________________________________
@@ -309,13 +336,13 @@ std::vector<std::vector<Point2f>> direct_rect(std::vector<std::vector<cv::Point>
     sort(minAreaRects.begin(), minAreaRects.end(), compare_Left_or_Right);
 
     //-------调试矩形稳定程度-------
-    Point2f rect_point[4];
+    /*Point2f rect_point[4];
     for(int k = 0; k < 2; k++)
     {   
         minAreaRects[k].points(rect_point);
         draw_rect_array(rect_point, frame);
     }
- 
+    */
     //-------合成-------
     std::vector<std::vector<Point2f>> manyrect;
     for(int j = 0; j < (minAreaRects.size() - 1); j++)
@@ -324,6 +351,40 @@ std::vector<std::vector<Point2f>> direct_rect(std::vector<std::vector<cv::Point>
     }
     return manyrect;
 
+}
+
+//--------------------------------------------距离识别-------------------------------------------------------
+
+void distances_detect(std::vector<Point2f> rect_combine, Mat frame)
+{       
+    std::vector<Point3f> world_input;
+
+    world_input.push_back(Point3f(ARMOUR_LENGTH/2, -ARMOUR_WIDTH/2, 0));  // 右下
+    world_input.push_back(Point3f(-ARMOUR_LENGTH/2, -ARMOUR_WIDTH/2, 0));  // 左下
+    world_input.push_back(Point3f(-ARMOUR_LENGTH/2, ARMOUR_WIDTH/2, 0));  // 左上 
+    world_input.push_back(Point3f(ARMOUR_LENGTH/2, ARMOUR_WIDTH/2, 0));  // 右上    
+    world_input.push_back(Point3f(0,0,0));  // 中心
+                
+
+    Mat rvec, tvec;
+    cv::solvePnPRansac(world_input, rect_combine, CAMERA_MADRIX, DIST_COEFFS, rvec, tvec);
+
+    std::cout<<tvec<<std::endl;
+
+
+    /*
+    Mat Rvec, Tvec;
+    rvec.convertTo(Rvec, CV_32F);  // 旋转向量转换格式
+	tvec.convertTo(Tvec, CV_32F); // 平移向量转换格式 
+
+	Mat_<float> rotMat(3, 3);
+	Rodrigues(Rvec, rotMat);  // 旋转向量转成旋转矩阵
+
+    Mat distance;
+	distance = -rotMat.inv() * Tvec;
+    */
+
+    world_input.clear();       
 }
 
 //-------------------------------------------主函数-----------------------------------------------------
@@ -341,19 +402,11 @@ int main()
         const double CAP_HEIGHT = cap.get(cv::CAP_PROP_FRAME_HEIGHT);
 
         //-------测距参数------
-        std::vector<cv::Point3d> world_point;  // 用于PnP输入世界坐标系点集
-        std::vector<cv::Point2d> img_point;  // 用于PnP输入像素坐标点集
-
-        float last_rect_angle[10] = {0};  // 储存上一帧角度信息
+        float last_rect_angle[10] = {0};  // 储存上一帧角度信息，光流法可能用到
 
         //-------开始读取-------
         while(cap.read(frame))
         {   
-             //-------测距参数------
-            double DISTANCE_DEEP_ZERO = 0;  // 用于记录第一帧（假设深度为零）的中心点image距离
-            double deep_cal = 0;  // 用于记录深度
-            
-            
             frame_num++;
             if(!frame.empty())
             {   
@@ -361,17 +414,16 @@ int main()
                 //cv::imshow("ori",frame);
                 
                 Mat baw = pretreatment(frame);
-                
                 Mat mask = region_interested(baw, CAP_HEIGHT, CAP_WIDTH);
-
                 Mat dst = filtering(mask);
                 
                 //-------检索外部轮廓-------
                 std::vector<std::vector<cv::Point> > Point_fix;
                 std::vector<cv::Vec4i> hierarchy;
                 findContours(dst, Point_fix, hierarchy, cv::RETR_LIST, cv::CHAIN_APPROX_NONE);
-                drawContours(frame, Point_fix, -1, Scalar(255, 0, 255), -1);
-                imshow("drawframe",frame);
+                //drawContours(frame, Point_fix, -1, Scalar(255, 0, 255), -1);
+                //imshow("drawframe",frame);
+
                 //-------轮廓、中心点检测（主要模块1)-------
                 std::vector<std::vector<Point2f>> Rect_angpoint;
                 Rect_angpoint = direct_rect(Point_fix, frame);
@@ -380,11 +432,11 @@ int main()
                     draw_rect(Rect_angpoint[i], frame);
                 imshow("Rect",frame);
                 //draw_point(frame, center_point, rect_centerpoint);
-
-                //distances_detect(minAreaRects, center_point, rect_centerpoint, No_rect, frame);
+                for(int i = 0; i < Rect_angpoint.size(); i++)
+                    distances_detect(Rect_angpoint[i], frame);
 
             }
-        if(cv::waitKey(100) >= 0)  //一秒约24帧,按下键盘任意键退出
+        if(cv::waitKey(50) >= 0)  //一秒约24帧,按下键盘任意键退出
             break;
         }
     }
