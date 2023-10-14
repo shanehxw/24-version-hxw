@@ -1,3 +1,0 @@
-/home/hxw/Code/2.4/build/CMakeFiles/rebuild_cache.dir
-/home/hxw/Code/2.4/build/CMakeFiles/edit_cache.dir
-/home/hxw/Code/2.4/build/CMakeFiles/ar.dir

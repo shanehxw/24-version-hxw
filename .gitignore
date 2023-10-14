@@ -1,0 +1,13 @@
+# compile files and directories
+*build
+build
+.vscode
+
+# midea files
+*.png
+*.jpg
+*.jpeg
+*.avi
+*.mp4
+
+# !/Internship/3.1/Power_machine.avi
