@@ -7,7 +7,7 @@ add_library(assembly1 SHARED ${ASSEMBLY1_DIR1})
 
 target_include_directories(
     assembly1 
-    PUBLIC include/robotlab
+    PUBLIC include
 
 )
 

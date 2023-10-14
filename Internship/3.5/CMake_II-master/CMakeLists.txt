@@ -7,6 +7,8 @@ find_package(OpenCV REQUIRED)
 add_executable(server server.cpp)
 add_executable(client client.cpp)
 
+add_executable(assembly1_test ${CMAKE_CURRENT_SOURCE_DIR}/modules/assembly1/test/assembly1_test.cpp)
+
 
 # # # # 以下内容禁止修改 # # # #
 option(BUILD_A "build modules a" ON)
@@ -22,13 +24,10 @@ add_subdirectory(common)
 # 小提示: module2 需要用到 pthread，即 target_link_libraries(xxx pthread)
 # # # # 以上内容禁止修改 # # # #
 
+add_test(NAME assembly1_test COMMAND assembly1_test)
 
-
-# set(TEST_OPTION ON)
-# option(with_a ON)
-# add_definitions(-DWITH_A  1)
-
-
+option(with_a ON)
+add_definitions(-DWITH_A=${with_a})
 
 target_include_directories(
     server 
@@ -47,4 +46,9 @@ target_link_libraries(
 target_link_libraries(
     client                              
     PUBLIC module2
+)
+
+target_link_libraries(  
+    assembly1_test  
+    PUBLIC assembly1
 )
