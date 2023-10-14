@@ -190,6 +190,63 @@ Mat img_filter_forrect(Mat dst){
     return frame_gaublur;
 }
 
+//-------滤波处理（靶心腐蚀）-------
+Mat img_filter_forcircle1(Mat dst){
+
+    cv::Mat kernel3 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));  //池化核大小
+    cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
+    cv::GaussianBlur(dst, dst, Size(3,3), 0, 0);
+    cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
+    cv::dilate(dst, dst, kernel3, Point(-1,-1), 1);
+    cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
+
+    //cv::GaussianBlur(dst, dst, Size(3,3), 0, 0);
+    //cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
+    
+    imshow("erode", dst);
+    return dst;
+}
+
+//-------在轮廓中搜索，返回只有一级子轮廓以及没有子轮廓的轮廓
+std::vector<std::vector<Point>> find_target_contours0_1(std::vector<std::vector<Point>> contours, std::vector<cv::Vec4i> hierarchy)
+{
+    std::vector<std::vector<Point>> result;
+
+    for (size_t i = 0; i < contours.size(); i++)
+    {
+        for (int j = hierarchy[i][2]; j != -1; j = hierarchy[j][0])  // j是i的一个子轮廓，遍历i的所有一级子轮廓
+        {
+            if (hierarchy[j][2] == -1)  // 如果子轮廓没有子轮廓->i只有一级子轮廓
+            {
+                result.push_back(contours[i]);
+            }
+            else  //  如果子轮廓j有子轮廓->不管，反正迟早会遍历到
+            {   
+                continue;
+            }
+        }
+
+        if (hierarchy[i][2] == -1)  // 如果i没有子轮廓
+            result.push_back(contours[i]);
+    }
+
+    return result;
+}
+
+//-------寻找没有子轮廓的轮廓
+std::vector<std::vector<Point>> find_target_contours0(std::vector<std::vector<Point>> contours, std::vector<cv::Vec4i> hierarchy)
+{
+    std::vector<std::vector<Point>> result;
+
+    for (size_t i = 0; i < contours.size(); i++)
+    {
+        if (hierarchy[i][2] == -1)  // 如果i没有子轮廓
+            result.push_back(contours[i]);
+    }
+
+    return result;
+}
+
 //---------------------------------------------判断是否为激活靶心----------------------------------------------------------------------------
 
 std::vector<Point2f> judge_target(std::vector<Point2f> rect_center, std::vector<Point2f> pre_target_point, Point2f center_point_R, Mat frame)
@@ -231,10 +288,12 @@ std::vector<Point2f> judge_target(std::vector<Point2f> rect_center, std::vector<
             if(i != j){
                 float dis = calculateDistance(mid_point[j], judge_points[i]);
                 if(dis < near_dis){
-                    target.push_back(pre_target_point[i]);
-                    //circle(frame, judge_points[i], 3, Scalar(255,120,255), -1);
-                    //circle(frame, mid_point[j], 3, Scalar(0,0,255), -1);
-                    //break;
+                    if(VIDEO_WIDTH/10 < pre_target_point[i].x && VIDEO_HEIGHT/10 < pre_target_point[i].y){
+                        target.push_back(pre_target_point[i]);
+                        //circle(frame, judge_points[i], 3, Scalar(255,120,255), -1);
+                        //circle(frame, mid_point[j], 3, Scalar(0,0,255), -1);
+                        //break;
+                    }
                 }
             }
         }
@@ -244,7 +303,7 @@ std::vector<Point2f> judge_target(std::vector<Point2f> rect_center, std::vector<
 
 //---------------------------------------------轮廓检测——靶心——腐蚀----------------------------------------------------------
 
-//-------邻近点取方差聚合-------
+//-------邻近点取方差聚合(初步)-------
 Point2f near_fix(std::vector<Point2f> group, int r)
 {   
     float sum_x = 0;
@@ -294,7 +353,7 @@ std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2) 
     float k4 = k2 * 1.732;  // 与较远点的范围阈值，*1.732
 
 
-    float near_dis = 30;  // 与相近点的范围阈值
+    float near_dis = 15;  // 与相近点的范围阈值
 
 
     int if_group = 0;  // 用来判断是否处是接近点
@@ -346,7 +405,7 @@ std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2) 
         
         if(normal_num > wrong_num)
         {   
-            if(if_group)
+            if(if_group > 0)
             {   
                 Point2f fix_point = near_fix(possible_group, near_dis);
                 if(fix_point.x > VIDEO_WIDTH/10 && fix_point.x < VIDEO_WIDTH * 9/10 && fix_point.y > VIDEO_HEIGHT/10 && fix_point.y < VIDEO_HEIGHT* 9/10)
@@ -366,25 +425,42 @@ std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2) 
             continue;
     }
     
-    if(center_points.size() > 5)
-        center_points = point_fix(center_points, k1+5, k2-5);
+    //if(center_points.size() > 5)
+        //center_points = point_fix(center_points, k1+3, k2-3);
     return center_points;
 }
 
 //-------靶心检测主函数-------
-std::vector<Point2f> Point_detect_circle(Mat dst, Mat frame)
+std::vector<Point2f> Point_detect_circle(Mat dst, Mat frame, Point2f center_R)
 {   
-    //简单滤波
-    cv::Mat kernel3 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));  //池化核大小
-    cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
-    
-    //cv::GaussianBlur(dst, dst, Size(3,3), 0, 0);  // 高斯滤波处理
-    imshow("erode", dst);
+    //不用轮廓变化的滤波
+    dst = img_filter_forcircle1(dst);
+
+    //用轮廓变化的滤波
+    //cv::Mat kernel3 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));  //池化核大小
+    //cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
+    //cv::GaussianBlur(dst, dst, Size(3,3), 0, 0);
+    //cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
+    //cv::dilate(dst, dst, kernel3, Point(-1,-1), 1);
+    //cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
+    //cv::GaussianBlur(dst, dst, Size(3,3), 0, 0);
+    //cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
+    //cv::GaussianBlur(dst, dst, Size(3,3), 0, 0);
+    //imshow("erode", dst);
 
     //-------轮廓检测-------
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
     findContours(dst, contours, hierarchy, cv::RETR_LIST, cv::CHAIN_APPROX_NONE);
+
+    //使用轮廓变化
+    //findContours(dst, contours, hierarchy, RETR_TREE, CHAIN_APPROX_NONE);
+    //contours = find_target_contours0(contours, hierarchy);
+
+    //-------轮廓检测调试
+    cv::Mat empty_Mat = cv::Mat::zeros(frame.size(), frame.type());
+    drawContours(empty_Mat, contours, -1, Scalar(255, 0, 255), -1);
+    imshow("drawframe",empty_Mat);
 
     std::vector<Point2f> cir_center_pretreat;
     std::vector<RotatedRect> rect_to_cir;
@@ -395,7 +471,12 @@ std::vector<Point2f> Point_detect_circle(Mat dst, Mat frame)
         Moments M = moments(contours[i]);
         // 计算轮廓的质心坐标
         Point2f center(M.m10 / M.m00, M.m01 / M.m00);
-    
+        
+        // 剔除R标周围点
+        float R_roi = 60;
+        if(center_R.x - R_roi < center.x && center.x < center_R.x + R_roi && center_R.y - R_roi < center.y && center.y < center_R.y + R_roi)  // 剔除R标附近的点，80*80的矩形
+            continue;
+
         // 计算最小圆形
         RotatedRect temprect_to_cir = minAreaRect(contours[i]);
         float temprect_width_height[2];
@@ -405,8 +486,9 @@ std::vector<Point2f> Point_detect_circle(Mat dst, Mat frame)
         if (temprect_width_height[0] / temprect_width_height[1] < 1.8) 
         {    
             float radius = std::sqrt(temprect_width_height[0] * temprect_width_height[0] + temprect_width_height[1] * temprect_width_height[1]) / 2;
-            if(radius > 4 && radius < 40)
-            {
+            if( radius > 3 && radius < 40)
+            {   
+                cir_center_pretreat.push_back(temprect_to_cir.center);
                 cir_center_pretreat.push_back(center);
 
             }
@@ -415,10 +497,11 @@ std::vector<Point2f> Point_detect_circle(Mat dst, Mat frame)
     //draw_point(cir_center_pretreat, frame, Scalar(0,255,255), 3);
     //imshow("cir_center", frame);
 
-    std::vector<Point2f> cir_center_point = point_fix(cir_center_pretreat, 140, 210);  // 点的分类与聚合
+    // 点的分类与聚合
+    std::vector<Point2f> cir_center_point = point_fix(cir_center_pretreat, 160, 190);
 
-    draw_point(cir_center_point, frame, Scalar(255,255,255), 3);
-    //imshow("cir_center", frame);
+    draw_point(cir_center_point, frame, Scalar(255,255,255), 5);
+    imshow("cir_center", frame);
     
     //std::cout<<"---------------------------"<<std::endl;
     
@@ -526,6 +609,9 @@ std::vector<std::vector<RotatedRect>> rect_compare(std::vector<cv::RotatedRect> 
 //-------矩形检测主函数-------
 std::vector<Point2f> Point_detect_rect(Mat dst, Mat frame, Point2f* center_point)  // 要求膨胀至闭环才能使用， 主函数
 {   
+    //-------简单滤波-------
+    dst = img_filter_forrect(dst);
+
      //-------轮廓检测-------
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
@@ -546,7 +632,6 @@ std::vector<Point2f> Point_detect_rect(Mat dst, Mat frame, Point2f* center_point
     return rect_center;
 }
 
-
 //------------------------------------------------主函数--------------------------------------------------
 int main(){
     std::cout<<"Hello,pm"<<std::endl;
@@ -564,13 +649,12 @@ int main(){
 
             Mat dst_baw = img_baw(frame);
 
-            Mat dst_dil = img_filter_forrect(dst_baw);
-
-            std::vector<Point2f> pre_target = Point_detect_circle(dst_baw, frame);
-
-            Point2f center;
-            std::vector<Point2f> rect_center = Point_detect_rect(dst_dil, frame, &center);
+            Point2f center;  // R标位置
+            std::vector<Point2f> rect_center = Point_detect_rect(dst_baw, frame, &center);  // 激活矩形中心点
             circle(frame, center, 5, Scalar(255,255,255), -1);
+            imshow("pre_target", frame);
+
+            std::vector<Point2f> pre_target = Point_detect_circle(dst_baw, frame, center);  // 靶心中心点
 
             std::vector<Point2f> target;
             if(&center != NULL)
@@ -586,9 +670,6 @@ int main(){
 
 
     }
-
-
-
 
     return 0;
 }
