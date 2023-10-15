@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.1.0)
 
-project(Power_machine_project)
+project(armour_pro_project)
  
 find_package(OpenCV REQUIRED)
 
-add_executable(pm pm_detect.cpp)
+add_executable(arp armour_pro.cpp)
 
 target_link_libraries(
-    pm                              
+    arp                              
     PUBLIC ${OpenCV_LIBS} 
 )
 
 target_include_directories(
-    pm                            
+    arp                            
     PUBLIC ${Opencv_INCLUDE_DIRS}     
 )
