@@ -192,7 +192,7 @@ Mat img_filter_forcircle1(Mat dst){
     //cv::GaussianBlur(dst, dst, Size(3,3), 0, 0);
     //cv::erode(dst, dst, kernel3, Point(-1,-1), 1);
     
-    //imshow("erode", dst);
+    imshow("erode", dst);
     return dst;
 }
 
@@ -346,7 +346,7 @@ std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2) 
     int j = 0;
 
     float k3 = k1 * 1.732;
-    float k4 = k2 * 1.732;  // 与较远点的范围阈值，*1.732
+    float k4 = k2 * 1.732;  // 与较远点的范围阈值，*1.732(根号3)
 
 
     float near_dis = 15;  // 与相近点的范围阈值
@@ -466,13 +466,13 @@ std::vector<Point2f> rect_contours_pre_recognize(std::vector<std::vector<cv::Poi
         }
     } 
 
-    for(int minrect_index = 0; minrect_index < contours_min_rects.size(); minrect_index++)
-    {   
-        Point2f min_rect_point[4];
-        contours_min_rects[minrect_index].points(min_rect_point);
-        draw_rect_array(min_rect_point, frame, Scalar(255, 0, 0));
-    }
-    //imshow("min_rect",frame);
+        for(int minrect_index = 0; minrect_index < contours_min_rects.size(); minrect_index++)
+        {   
+            Point2f min_rect_point[4];
+            contours_min_rects[minrect_index].points(min_rect_point);
+            draw_rect_array(min_rect_point, frame, Scalar(255, 0, 0));
+        }
+        imshow("min_rect",frame);
 
     //取出得到的矩形中心点
     std::vector<Point2f> rect_center;

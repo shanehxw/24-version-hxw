@@ -34,7 +34,7 @@ const double PI = 3.14159265;
 //-------------------------------------------------3.1---------------------------------------------------
 
 //-------通道分离主函数-------
-Mat img_baw(Mat frame)  // 对两个二值图取交集
+Mat img_baw(Mat frame)  // 激活矩形
 {
      //分别作灰度图和通道分离处理
     Mat img_gray_baw = img_gray(frame);
@@ -43,14 +43,18 @@ Mat img_baw(Mat frame)  // 对两个二值图取交集
     //对两个二值化图像进行交运算,降低噪声
     Mat img_and;
     bitwise_and(img_gray_baw, img_channel_baw, img_and);
-    imshow("img_and",img_and);
+    //imshow("img_and",img_and);
     
     return img_and;
 }
 
+
+
 //-------判断是否为激活靶心-------
 std::vector<Point2f> judge_target(std::vector<Point2f> rect_center, std::vector<Point2f> pre_target_point, Point2f center_point_R, Mat frame)
-{   
+{       
+        //--debug
+        //std::cout<<"pre_target_point = "<<pre_target_point.size()<<std::endl;
     std::vector<Point2f> target;
     // 计算预估配对点
     std::vector<Point2f> judge_points;
@@ -81,20 +85,20 @@ std::vector<Point2f> judge_target(std::vector<Point2f> rect_center, std::vector<
     }
     //draw_point(mid_point, frame, Scalar(0,255,0), 3);
 
-    //利用距离阈值判断目标点是否与激活矩阵匹配,对距离在near_dis以内的进行计算
-    float near_dis = 15;
+    //利用距离阈值判断目标点是否与激活矩阵匹配,对距离在near_dis以外的进行计算
+    float near_dis = 30;
     for(i = 0; i < judge_points.size(); i++){
+        int if_near_cal = 0;
         for(j = 0; j < mid_point.size(); j++){
             if(i != j){
-                float dis = calculateDistance(mid_point[j], judge_points[i]);
-                if(dis < near_dis){
-                    if(VIDEO_WIDTH/10 < pre_target_point[i].x && VIDEO_HEIGHT/10 < pre_target_point[i].y){
-                        target.push_back(pre_target_point[i]);
-                        //circle(frame, judge_points[i], 3, Scalar(255,120,255), -1);
-                        //circle(frame, mid_point[j], 3, Scalar(0,0,255), -1);
-                        //break;
-                    }
+                float dis = calculateDistance(judge_points[i], mid_point[j]);
+                if(near_dis > dis){  // 如果已经激活
+                    break;
                 }
+                if(j == mid_point.size() - 1){  //如果未检测到激活矩形
+                    target.push_back(pre_target_point[i]);
+                }
+
             }
         }
     }
@@ -128,10 +132,10 @@ std::vector<Point2f> Point_detect_circle(Mat dst, Mat frame, Point2f center_R)
     //findContours(dst, contours, hierarchy, RETR_TREE, CHAIN_APPROX_NONE);
     //contours = find_target_contours0(contours, hierarchy);
 
-    //-------轮廓检测调试
-    //cv::Mat empty_Mat = cv::Mat::zeros(frame.size(), frame.type());
-    //drawContours(empty_Mat, contours, -1, Scalar(255, 0, 255), -1);
-    //imshow("drawframe",empty_Mat);
+        //-------轮廓检测调试
+        //cv::Mat empty_Mat = cv::Mat::zeros(frame.size(), frame.type());
+        //drawContours(empty_Mat, contours, -1, Scalar(255, 0, 255), -1);
+        //imshow("drawframe",empty_Mat);
 
     std::vector<Point2f> cir_center_pretreat;
     std::vector<RotatedRect> rect_to_cir;
@@ -172,7 +176,7 @@ std::vector<Point2f> Point_detect_circle(Mat dst, Mat frame, Point2f center_R)
     std::vector<Point2f> cir_center_point = point_fix(cir_center_pretreat, 160, 190);
 
     draw_point(cir_center_point, frame, Scalar(255,255,255), 5);
-    imshow("cir_center", frame);
+    //imshow("cir_center", frame);
     
     //std::cout<<"---------------------------"<<std::endl;
     
@@ -212,7 +216,7 @@ std::vector<float> world_angle_cal(Point2f center_R, std::vector<Point2f> target
     std::vector<float> angles;
     for(int i = 0; i < target_points.size(); i++){
         if(target_points[i].x != center_R.x){  // 若存在斜率y/x
-            float temp_angle = -((std::atan2(target_points[i].y - center_R.y, target_points[i].x - center_R.x)) * 180 / PI);  // 计算世界坐标系下的角度
+            float temp_angle = (std::atan2(target_points[i].y - center_R.y, target_points[i].x - center_R.x)) * 180 / PI;  // 计算世界坐标系下的角度
             angles.push_back(temp_angle);
         }
         else{  // 若不存在斜率y/x
@@ -231,7 +235,7 @@ std::vector<float> world_angle_cal(Point2f center_R, std::vector<Point2f> target
 
 std::vector<float> angles_detect(Point2f center_R, std::vector<Point2f> target_points, Mat frame)
 {
-    std::vector<float> angles = world_angle_cal(center_R, target_points);  // 计算出角度，序号和target序号一一对应
+    std::vector<float> angles = world_angle_cal(center_R, target_points);  // 计算出角度，序号和target序号一一对应，角度范围-180 - 180
     std::vector<std::string> put_txt;
     for(int i = 0; i < angles.size(); i++){
         std::string s = std::to_string(angles[i]);
@@ -245,7 +249,44 @@ std::vector<float> angles_detect(Point2f center_R, std::vector<Point2f> target_p
 
     return angles;
 }
+
+//-------------------------------------------------3.2-----------------------------------------------------
+
+//std::vector<float> bullet_angle_cal(std::vector<float> angles)  // 计算当前帧枪口角度
+//{
+ //   1
+//}
+
+
+
 //-------------------------------------------------3.3----------------------------------------------------
+
+std::vector<float> angles_next_cal(std::vector<float> angles, std::vector<float> angles_before)  // 简单根据两帧差计算下一帧角度，模型：匀角速度
+{   
+    std::vector<float> angles_next;
+    if(angles.size() == angles_before.size()){
+        for(int i = 0; i < angles.size(); i++){
+            float temp_next = 2 * angles[i] - angles_before[i];
+            angles_next.push_back(temp_next);
+        }
+    }
+    return angles_next;
+}
+
+std::vector<Point2f> target_next_cal(std::vector<float> angles_next, std::vector<float> angles, std::vector<Point2f> target, Point2f center)  // 计算目标点下一帧的坐标
+{   
+    std::vector<Point2f> target_next;
+    for(int i = 0 ; i < target.size(); i++){
+        float R = calculateDistance(target[i], center);
+        float angle_radium = ( (1 - 0.8) * angles[i] + 0.8 * angles_next[i]) * PI / 180;
+        float target_next_x = R * std::cos(angle_radium) + center.x;
+        float target_next_y = R * std::sin(angle_radium) + center.y;
+        Point2f temp_target (target_next_x, target_next_y);
+        target_next.push_back(temp_target);
+    }
+    return target_next;
+}
+
 
 //------------------------------------------------主函数--------------------------------------------------
 int main(){
@@ -255,7 +296,7 @@ int main(){
 
     Mat frame;
     int flame_num = 0;
-
+    std::vector<float> angles_before;  // 在每次使用完之后要清空！！
     if(cap.isOpened())
     {
         while(cap.read(frame))
@@ -269,7 +310,7 @@ int main(){
             Point2f center;  // R标位置
             std::vector<Point2f> rect_center = Point_detect_rect(dst_baw, frame, &center);  // 激活矩形中心点
             circle(frame, center, 5, Scalar(255,255,255), -1);
-            imshow("pre_target", frame);
+            //imshow("pre_target", frame);
 
             std::vector<Point2f> pre_target = Point_detect_circle(dst_baw, frame, center);  // 靶心中心点
 
@@ -282,10 +323,21 @@ int main(){
 
             std::vector<float> angles = angles_detect(center, target, frame);
             imshow("3.1", frame);
+
+            if(flame_num != 1){  // 不是第一帧
+                std::vector<float> angles_next = angles_next_cal(angles, angles_before);
+                std::vector<Point2f> target_next = target_next_cal(angles_next, angles, target, center);
+                draw_point(target_next, frame, Scalar(255,255,0), 1);
+                imshow("3.3", frame);
+            }
+
             //-------3.1-------
             
             //-------3.3-------
 
+
+                angles_before.clear();
+                angles_before.assign(angles.begin(), angles.end());  // angle数据迭代
 
             if(cv::waitKey(50) >= 0)
                 break;
