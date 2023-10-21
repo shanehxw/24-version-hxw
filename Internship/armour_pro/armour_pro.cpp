@@ -239,7 +239,7 @@ Mat filter_number(Mat dst)
 //长宽比筛选 -> 角度初步筛选（因为装甲板实际上大部分都是垂直于地面，可以筛一些离谱噪声）
 std::vector<std::vector<RotatedRect>> rect_detect1(Mat dst, Mat img)
 {
-    //-------提取轮廓-------
+//-------1、提取轮廓-------
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
     findContours(dst, contours, hierarchy, cv::RETR_LIST, cv::CHAIN_APPROX_NONE);
@@ -247,7 +247,7 @@ std::vector<std::vector<RotatedRect>> rect_detect1(Mat dst, Mat img)
         drawContours(img, contours, -1, Scalar(255, 0, 0), -1);
         //imshow("drawframe",img);
 
-    //-------minAreaRect + 长宽筛选 + 矩形本身斜率筛选-------
+//-------2、minAreaRect + 长宽筛选 + 矩形本身斜率筛选-------
     std::vector<RotatedRect> rect_pre1;  // 长宽比检测得到的矩形轮廓pre1
     std::vector<float*> rect_pre1_wah;  // 储存pre1长宽
     //std::vector<float> rect_pre1_longer_angle;  // 储存pre1较长边与水平夹角，使用atan，范围在-90～90、
@@ -296,7 +296,7 @@ std::vector<std::vector<RotatedRect>> rect_detect1(Mat dst, Mat img)
         //--debug
         //imshow("pre1",img);
         
-    //-------根据位置分组，通过面积计算出当前矩形的roi范围，然后在范围里分组*，筛去两个中心点所连成的直线的斜率较大的/我新写一个函数，计算rect较长边的斜率-------
+//-------3、根据位置分组，通过面积计算出当前矩形的roi范围，然后在范围里分组*，筛去两个中心点所连成的直线的斜率较大的/我新写一个函数，计算rect较长边的斜率-------
     float k_roimin_pre1 = 2;
     float k_roimax_pre1 = 6;  // 假设面积的平方根和roi范围是正比关系，目前来看是一个经验值，但是应该可以通过计算得到更精确值
     std::vector<float> roimin_pre1;
@@ -519,29 +519,65 @@ std::vector<std::vector<RotatedRect>> target_find_inRoi(std::vector<std::vector<
             for(j = 0; j < Roi_points_fix.size(); j++){
                 draw_rect(Roi_points_fix[j], img, Scalar(255, 255, 255));
             }     
+        //--debug
+        for(j = 0; j < Roi_points_fix.size(); j++){
+            Mat roi_img = Roi_fetch(dst_number, Roi_points_fix[j]);
+                if(i == 0 && j == 0){
+                    imshow("5-0",roi_img);
+                }
+                if(i == 0 && j == 1){
+                    imshow("5-1",roi_img);
+                }
+                if(i == 0 && j == 2){
+                    imshow("5-2",roi_img);
+                }
+                if(i == 1 && j == 0){
+                    imshow("3-0",roi_img);
+                }
+                if(i == 1 && j == 1){
+                    imshow("3-1",roi_img);
+                }
+                if(i == 1 && j == 2){
+                    imshow("3-2",roi_img);
+                }
+                if(i == 2 && j == 0){
+                    imshow("1-0",roi_img);
+                }
+                if(i == 2 && j == 1){
+                    imshow("1-1",roi_img);
+                }
+        }
+
         //腐蚀检测
         for(j = 0; j < Roi_points_fix.size(); j++){
             Mat roi_img = Roi_fetch(dst_number, Roi_points_fix[j]);
             Mat roi_erode = Roi_erode(roi_img);
                 //--debug
                 if(i == 0 && j == 0){
-                    imshow("5-0",roi_erode);
+                    imshow("5-0-e",roi_erode);
                 }
                 if(i == 0 && j == 1){
-                    imshow("5-1",roi_erode);
+                    imshow("5-1-e",roi_erode);
                 }
                 if(i == 0 && j == 2){
-                    imshow("5-2",roi_erode);
+                    imshow("5-2-e",roi_erode);
                 }
                 if(i == 1 && j == 0){
-                    imshow("3-0",roi_erode);
+                    imshow("3-0-e",roi_erode);
                 }
                 if(i == 1 && j == 1){
-                    imshow("3-1",roi_erode);
+                    imshow("3-1-e",roi_erode);
                 }
                 if(i == 1 && j == 2){
-                    imshow("3-2",roi_erode);
+                    imshow("3-2-e",roi_erode);
                 }
+                if(i == 2 && j == 0){
+                    imshow("1-0-e",roi_erode);
+                }
+                if(i == 2 && j == 1){
+                    imshow("1-1-e",roi_erode);
+                }
+
             if( Roi_erode_findnum(roi_erode) ){  // 可改进，没有设置检验，是否有两组或以上符合筛选条件的
                 std::vector<RotatedRect> temp_for_find = armour_group[i];  // 原文件深拷贝
                 std::vector<RotatedRect> target_tempforsave;  // 缓存区
@@ -563,13 +599,15 @@ std::vector<std::vector<RotatedRect>> target_find_inRoi(std::vector<std::vector<
         // 膨胀检测
         for(j = 0; j < Roi_points_fix.size(); j++){ 
             Mat roi_img = Roi_fetch(dst_number, Roi_points_fix[j]);
-            Mat roi_dilate = Roi_dilate(roi_img);
+            Mat roi_dilate = Roi_dilate(roi_img);                
+                //--debug
                 if(i == 2 && j == 0){
-                    imshow("1-0",roi_dilate);
+                    imshow("1-0-d",roi_img);
                 }
                 if(i == 2 && j == 1){
-                    imshow("1-1",roi_dilate);
+                    imshow("1-1-d",roi_img);
                 }
+
             if( Roi_dilate_findnum(roi_dilate) ){  // 可改进，没有设置检验，是否有两组或以上符合筛选条件的
                 std::vector<RotatedRect> temp_for_find = armour_group[i];
                 std::vector<RotatedRect> target_tempforsave;
@@ -633,13 +671,12 @@ int main(){
     Mat img = imread("../armour_blue.png");
     if(img.data != nullptr){
         // 寻找灯条预处理
-        Mat dst_light = img_baw_light(img);
-        dst_light =filter_light(dst_light);
+        Mat dst_light = img_baw_light(img);  // BGR选取B通道，与灰度图二值化取交集
+        dst_light =filter_light(dst_light);  // 简单膨胀处理，增大灯条面积减少误差
         // 寻找数字预处理
-        Mat dst_number = img_baw_number(img);
-        //dst_number = filter_number(dst_number);  // 可以先不处理，等到roi筛选后再处理
+        Mat dst_number = img_baw_number(img);  // BGR通道选取R+G-B，全局二值化便于分析，后续可改为仅对ROI二值化
         //寻找灯条
-        std::vector<std::vector<RotatedRect>> armour_group = rect_detect1(dst_light, img);
+        std::vector<std::vector<RotatedRect>> armour_group = rect_detect1(dst_light, img);  // 通过各种阈值筛选出灯条并且分组
         //使用Roi检测数字得到目标
         std::vector<std::vector<RotatedRect>> target = target_find_inRoi(armour_group, dst_number, img);
             //--debug
@@ -647,9 +684,9 @@ int main(){
 
         std::vector<std::vector<Point2f>> target_armour_rioh;
         for(int i = 0; i < target.size(); i++){
-            std::vector<Point2f> temp_target = rhom_point_cal(target[i]);
+            std::vector<Point2f> temp_target = rhom_point_cal(target[i]);  // 装甲板特征点的计算
             target_armour_rioh.push_back(temp_target);
-            draw_rect(temp_target, img, Scalar(255,255,0));
+            draw_rect(temp_target, img, Scalar(255,255,0));  // 绘制图形
             circle(img, temp_target[4], 5, Scalar(255,255,0), -1);
         }
         

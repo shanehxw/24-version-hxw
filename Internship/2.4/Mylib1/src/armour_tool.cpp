@@ -243,7 +243,6 @@ std::vector<Point2f> rect_point_cal(float avg_dia, float avg_width, float k1_wor
 }
 
 // 想法：计算菱形角点，在计算速度上会比计算矩形更加快
-// 已经实现，但在框选上有误差，可以再调试
 std::vector<Point2f> rhom_point_cal(float avg_length, float avg_width, float x_diff, float y_diff, Point2f leftpoint, Point2f rightpoint,Point2f center)
 {
     float center_x = center.x;
@@ -298,13 +297,9 @@ std::vector<Point2f> combine_rect(RotatedRect rect1, RotatedRect rect2, Mat fram
     float y_diff = rect2_center[1] - rect1_center[1];
     
     float avg_length_pre = (rect1_landw[0] + rect2_landw[0])/ 2;
-    float m1 = 0.9;
     float avg_length = avg_length_pre - (rect1_landw[1] + rect2_landw[1]) / 2;
-    // 从两minareaRect长度求出length，消去灯条宽度带来的length误差
     
-    float m2 = 0.9;
     float avg_width = (std::sqrt(std::pow(rect2_center[0] - rect1_center[0], 2) + std::pow(rect2_center[1] - rect1_center[1], 2)));
-    // 从两中心点求出width，消去width的sqrt误差的系数
     
     float avg_dia = std::sqrt(std::pow(avg_length, 2) + std::pow(avg_width, 2));
     float k1 = 0;

@@ -150,8 +150,8 @@ Mat img_filter_forrect(Mat dst){
     Mat dst_dil;
     Mat dst_ero;
     Mat white_hat;
-    cv::Mat kernel7 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(7,7));  //池化核大小
-    cv::Mat kernel5 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5));  //池化核大小
+    //cv::Mat kernel7 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(7,7));  //池化核大小
+    //cv::Mat kernel5 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5));  //池化核大小
     cv::Mat kernel3 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));  //池化核大小
     //cv::dilate(dst, dst_dil, kernel7, Point(-1,-1), 1);
     //cv::erode(dst_dil, dst_ero, kernel7, Point(-1,-1), 1);
@@ -338,7 +338,7 @@ std::vector<Point2f> nearpoint_delete(std::vector<Point2f> points)
 }
 
 //-------聚合主函数-------
-std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2)  // 与较近点的范围阈值
+std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2)  // k1k2是与较近点的范围阈值
 {   
     //std::cout<<points.size()<<std::endl;
     std::vector<Point2f> center_points;
@@ -352,32 +352,32 @@ std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2) 
     float near_dis = 15;  // 与相近点的范围阈值
 
 
-    int if_group = 0;  // 用来判断是否处是接近点
-    int group_num[(int)points.size()] = {0};  // 用来储存相近点在points里的序号，避免for(i)重复进入possible_group
+    int if_group = 0;  // 用来判断点i在点j的遍历中是否成为相近点，防止点i重复进入相近点组
+    int group_num[(int)points.size()] = {0};  // 用来判断点i在之前是否已经加入某个相近点组，避免for(i)重复进入possible_group
 
     for(i = 0, if_group = 0; i < points.size(); i++){
         
-        if(group_num[i] == 1)  // 判断是否已经为接近点
+        if(group_num[i] == 1)
         {
             continue;
         }
 
         int normal_num = 0;
-        int wrong_num = 0;  // 计数器，用来判断是否是无关点
-        float k_judge = 1.5;
+        int wrong_num = 0;  // 计数器，根据两者比例判断点i是否是无关点
+        float k_judge = 1.5;  // 比例值
 
-        std::vector<Point2f> possible_group;  // 用于存储需要预处理的接近点
+        std::vector<Point2f> possible_group;  // 用于存储需要预处理的相近点
 
         for(j = 0; j < points.size(); j++){
             
             if(i != j){
-                float dis = calculateDistance(points[i], points[j]);
+                float dis = calculateDistance(points[i], points[j]);  // 判断点i与点j的距离
                 //std::cout<<i<<"、dis = "<<dis<<std::endl;
                 
-                if( (k1 < dis && dis < k2) || (k3 < dis && dis < k4)){  // 在正常范围
+                if( (k1 < dis && dis < k2) || (k3 < dis && dis < k4)){  // 距离在正常范围
                         normal_num++;
                 }
-                else if(dis < near_dis){  // 若有在极小范围内的
+                else if(dis < near_dis){  // 距离在极小范围内
                     if_group++;
                     if(if_group == 1)
                     {
@@ -401,15 +401,15 @@ std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2) 
         
         if(normal_num > wrong_num)
         {   
-            if(if_group > 0)
+            if(if_group > 0)  // 处理相近点组--聚类得到预估点
             {   
-                Point2f fix_point = near_fix(possible_group, near_dis);
+                Point2f fix_point = near_fix(possible_group, near_dis);  // 邻近点取方差求和，得到一个聚合点-- 关键在于聚合数学函数的选取，可以更优
                 if(fix_point.x > VIDEO_WIDTH/10 && fix_point.x < VIDEO_WIDTH * 9/10 && fix_point.y > VIDEO_HEIGHT/10 && fix_point.y < VIDEO_HEIGHT* 9/10)
                     center_points.push_back( fix_point );
                 else
                     continue;
             }
-            else
+            else  // 处理正常点
             {   
                 if(points[i].x > VIDEO_WIDTH/10 && points[i].x < VIDEO_WIDTH * 9/10 && points[i].y > VIDEO_HEIGHT/10 && points[i].y < VIDEO_HEIGHT* 9/10)
                     center_points.push_back( points[i] );
@@ -420,7 +420,7 @@ std::vector<Point2f> point_fix(std::vector<Point2f> points, float k1, float k2) 
         else
             continue;
     }
-    std::vector<Point2f> center_points1 = point_fix_simple(center_points);
+    std::vector<Point2f> center_points1 = point_fix_simple(center_points);  // 再简单聚合一次，专门处理相近点组
     std::cout<<center_points1.size()<<std::endl;
     return center_points1;
 }

@@ -252,12 +252,36 @@ std::vector<float> angles_detect(Point2f center_R, std::vector<Point2f> target_p
 
 //-------------------------------------------------3.2-----------------------------------------------------
 
-//std::vector<float> bullet_angle_cal(std::vector<float> angles)  // 计算当前帧枪口角度
-//{
- //   1
-//}
+std::vector<float> bullet_angle_cal(std::vector<float> angles, Mat frame)  // 计算当前帧枪口角度
+{   
+    std::vector<float> bullet_angle;
+    std::vector<std::string> put_txt;
 
+    const float R_TO_TARGET = 0.871;  // 靶心到R标实际半径
+    const float R_HEIGHT = 1.55;  // R标高度
+    const float DISTANCE_X = 7;  // 发射点到能量机关水平距离
+    const float g = 9.8;  // 重力加速度
+    float v0 = 30;  // 初速度
 
+    for(int i = 0; i < angles.size(); i++){
+        float distance_y = R_HEIGHT - R_TO_TARGET * std::sin(angles[i] *PI / 180);  // 当前靶点高度
+            // debug
+            std::cout<<"distance_y = "<< distance_y <<std::endl;
+        float delta = DISTANCE_X * DISTANCE_X + (2 * distance_y + g * DISTANCE_X * DISTANCE_X / v0 / v0) * (g * DISTANCE_X * DISTANCE_X / v0 / v0);
+        float tan_theta = (- DISTANCE_X + std::sqrt(delta)) / (g * DISTANCE_X * DISTANCE_X / v0 / v0);
+        float bullet_angle_result = std::atan(tan_theta) *180 / PI;
+        bullet_angle.push_back(bullet_angle_result);
+
+        std::string s = std::to_string(bullet_angle[i]);
+        put_txt.push_back(s);
+    }
+
+    for(int txt_y = 100, j = 0; j < put_txt.size(); j++, txt_y -= 20){
+        putText(frame, put_txt[j], cv::Point(20, txt_y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+    }
+
+    return bullet_angle;
+}
 
 //-------------------------------------------------3.3----------------------------------------------------
 
@@ -294,6 +318,7 @@ int main(){
 
     cv::VideoCapture cap("../Power_machine.avi");
 
+    // 用于记录之前帧信息
     Mat frame;
     int flame_num = 0;
     std::vector<float> angles_before;  // 在每次使用完之后要清空！！
@@ -301,29 +326,46 @@ int main(){
     {
         while(cap.read(frame))
         {   
+            // 记录当前帧数
             flame_num++;
             //imshow("ori",frame);
 
             //-------3.1-------
+            // 二值化：BGR通道分离（R-B），灰度值二值化取交集
             Mat dst_baw = img_baw(frame);
 
+            // 简单计算激活矩阵中心点和R标位置
+            // img_filter_forrect()--膨胀滤波，保证轮廓相连，能够被识别为一个整体
+            // rect_contours_pre_recognize()--通过面积以及长宽比筛选矩形和R标
             Point2f center;  // R标位置
             std::vector<Point2f> rect_center = Point_detect_rect(dst_baw, frame, &center);  // 激活矩形中心点
             circle(frame, center, 5, Scalar(255,255,255), -1);
             //imshow("pre_target", frame);
 
+            // 靶心识别
+            // img_filter_forrect()--腐蚀滤波，保证多环轮廓少相连，但是加速度较大时，产生的随机噪声较大，因此多环靶心会出现误差
+            // Point_detect_circle()--使用minarearect(),初步筛选符合长宽比与半径的轮廓
+            // point_fix()--通过点与点的距离，对预处理点进行分类讨论，筛选出正确点以及相近点
+            // near_fix()--通过邻近点取方差求和，求出相近点的一个预估点，但是由于预估点平均值较远端的点对平均点的影响较大，因此就算使用方差，也会对预估点造成较大影响
             std::vector<Point2f> pre_target = Point_detect_circle(dst_baw, frame, center);  // 靶心中心点
 
+            // 目标点识别
+            // 通过激活矩阵和靶心的一一对应，判断靶心点是否为目标点
             std::vector<Point2f> target;
             if(&center != NULL)
                 target = judge_target(rect_center, pre_target, center, frame);
             draw_point(target, frame, Scalar(255,120,255), 5);
-            std::cout<<target.size()<<std::endl;
+            //std::cout<<target.size()<<std::endl;
             //imshow("target", frame);
 
+            // 计算目标点角度
             std::vector<float> angles = angles_detect(center, target, frame);
             imshow("3.1", frame);
-
+            
+            // 计算重力影响下的枪口角度补偿
+            std::vector<float> bullet_angle = bullet_angle_cal(angles, frame);
+            
+            // 计算下一帧的目标点位置，用蓝色点表示
             if(flame_num != 1){  // 不是第一帧
                 std::vector<float> angles_next = angles_next_cal(angles, angles_before);
                 std::vector<Point2f> target_next = target_next_cal(angles_next, angles, target, center);
@@ -331,13 +373,9 @@ int main(){
                 imshow("3.3", frame);
             }
 
-            //-------3.1-------
-            
-            //-------3.3-------
-
-
-                angles_before.clear();
-                angles_before.assign(angles.begin(), angles.end());  // angle数据迭代
+            // 角度存储，用于下一帧计算
+            angles_before.clear();
+            angles_before.assign(angles.begin(), angles.end());
 
             if(cv::waitKey(50) >= 0)
                 break;
